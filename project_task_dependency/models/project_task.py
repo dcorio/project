@@ -3,6 +3,7 @@
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
 
 from odoo import models, fields, api
+from odoo.exceptions import Warning
 
 
 class ProjectTask(models.Model):
@@ -62,3 +63,26 @@ class ProjectTask(models.Model):
                 for t in depending_tasks:
                     depending_tasks += self.get_depending_tasks(t, recursive)
             return depending_tasks
+
+    @api.multi
+    def write(self, vals):
+        stage_id = vals.get('stage_id', False)
+        if stage_id and self.dependency_task_ids:
+            stage_model = self.env['project.task.type']
+            stage = stage_model.browse(stage_id)
+            if stage.closed:
+                for task in self.dependency_task_ids:
+                    if not task.stage_id.closed:
+                        raise Warning('The task depends on: %s' % task.name)
+        if stage_id and self.depending_task_ids:
+            stage_model = self.env['project.task.type']
+            stage = stage_model.browse(stage_id)
+            if not stage.closed:
+                for task in self.depending_task_ids:
+                    if task.stage_id.closed:
+                        raise Warning(
+                            'The task is a dependency of: %s' % task.name)
+
+        return super(ProjectTask, self).write(vals)
+
+
